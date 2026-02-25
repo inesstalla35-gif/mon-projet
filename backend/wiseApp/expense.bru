@@ -1,0 +1,31 @@
+meta {
+  name: expense
+  type: http
+  seq: 7
+}
+
+post {
+  url: http://localhost:3000/api/transaction/expense
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5N2I0Yjk1MTBiYjI3NGNlYjEzOTk0NSIsImlzVmVyaWZpZWQiOmZhbHNlLCJmaXJzdExvZ2luIjp0cnVlLCJpYXQiOjE3Njk2ODc5NTcsImV4cCI6MTc2OTY4ODg1N30.0LIeKdg4WZo-o3R3DMp__rUumWzPzhUOmCOUgxy7dgI
+}
+
+body:json {
+  {
+    "amount": 45000,
+    "category": "Transport",
+    "date": "2026-01-18",
+    "description": "Carburant semaine",
+    "period": "none"
+  }
+  
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

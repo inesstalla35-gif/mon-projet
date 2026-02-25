@@ -1,0 +1,26 @@
+meta {
+  name: register
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:3000/api/users/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "nom":"bernad",
+    "prenom":"serge",
+    "numero_telephone":676019339,
+    "email":"ama@gmail.com",
+    "mot_de_passe":"Moma123@?"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

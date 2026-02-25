@@ -1,0 +1,28 @@
+meta {
+  name: modifytransaction
+  type: http
+  seq: 8
+}
+
+put {
+  url: http://localhost:3000/api/transaction/expense/697b54ef39481a88ccecd4de
+  body: json
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NDNjMjdlNjJjODYxOTYxN2JjNTEwNCIsImlhdCI6MTc2OTY5MzA4OSwiZXhwIjoxNzY5NjkzOTg5fQ.Gik5-4xP-g0ozF1ttu3smDAwSi4RVQrSblkoF96crW8
+}
+
+body:json {
+  {
+    "amount": 55000,
+    "description": "Salaire janvier (ajusté)"
+  }
+  
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
