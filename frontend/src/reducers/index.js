@@ -18,9 +18,9 @@ import { combineReducers } from "redux";
 
 // Import des reducers
 import { authReducer } from "./authReducer";
-import { incomeReducer } from "./incomeReducer";
 import { objectiveReducer } from "./objectiveReducer";
 import { profileReducer } from "./profileReducer";
+import { transactionReducer } from "./Transactionreducer";
 
 /**
  * Root reducer combinant tous les reducers de l'application
@@ -34,7 +34,7 @@ import { profileReducer } from "./profileReducer";
  */
 const rootReducer = combineReducers({
   auth: authReducer,
-  income: incomeReducer,
+  transaction:transactionReducer,
   objective: objectiveReducer,
   profile: profileReducer,
 });

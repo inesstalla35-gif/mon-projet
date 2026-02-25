@@ -1,432 +1,264 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  SafeAreaView,
-  Dimensions,
-  Alert,
-  Keyboard,
-  TouchableWithoutFeedback,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Platform, Dimensions, Alert, Keyboard, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, StatusBar,
 } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
-import { login } from "../actions/authActions";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useDispatch, useSelector } from "react-redux";
+import { login } from "../actions/authActions";
 
 const { height } = Dimensions.get("window");
 
 const LoginScreen = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email,        setEmail]        = useState("");
+  const [password,     setPassword]     = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
 
-  const passwordInputRef = useRef(null);
-  const emailInputRef = useRef(null);
+  const passwordRef = useRef(null);
+  const navigation  = useNavigation();
+  const dispatch    = useDispatch();
 
-  const dispatch = useDispatch();
-  const { loading, error, token } = useSelector((state) => state.auth || {});
-  const navigation = useNavigation();
+  const { loading, error, token } = useSelector((state) => state.auth);
 
+  // ── Quand le token arrive → succès → Home ──────────────────
   useEffect(() => {
     if (token) {
-      Alert.alert("Succès", "Heureux de vous revoir !", [
+      Alert.alert("Connexion réussie ✅", "Heureux de vous revoir !", [
         {
           text: "OK",
-          onPress: () => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "Home" }],
-            });
-          },
+          onPress: () =>
+            navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
         },
       ]);
     }
-  }, [token, navigation]);
+  }, [token]);
 
   const handleLogin = () => {
     Keyboard.dismiss();
-    if (!email || !password) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs");
+    if (!email.trim() || !password) {
+      Alert.alert("Champs requis", "Veuillez remplir l'email et le mot de passe.");
       return;
     }
-    dispatch(login(email, password));
+    dispatch(login(email.trim(), password));
   };
 
-  const WiseInput = ({ 
-    icon, 
-    value, 
-    onChangeText, 
-    placeholder, 
-    secureTextEntry = false,
-    showToggle = false,
-    toggleValue = false,
-    onToggle = null,
-    isFocused,
-    setIsFocused,
-    keyboardType = "default",
-    onSubmitEditing = null,
-    returnKeyType = "next",
-    blurOnSubmit = false,
-    inputRef = null,
-  }) => (
-    <View style={[
-      styles.inputContainer,
-      isFocused && styles.inputContainerFocused
-    ]}>
-      <MaterialIcons 
-        name={icon} 
-        size={22} 
-        color={isFocused ? '#0D7377' : '#999'} 
-        style={styles.inputIcon}
-      />
-      <TextInput
-        ref={inputRef}
-        style={styles.input}
-        placeholder={placeholder}
-        placeholderTextColor="#999"
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        keyboardType={keyboardType}
-        autoCapitalize="none"
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        onSubmitEditing={onSubmitEditing}
-        returnKeyType={returnKeyType}
-        blurOnSubmit={blurOnSubmit}
-        underlineColorAndroid="transparent"
-        selectionColor="#0D7377"
-        // Désactive toutes les suggestions et autocorrections
-        autoCorrect={false}
-        autoComplete="off"
-        spellCheck={false}
-        textContentType="none"
-        importantForAutofill="no"
-        autoFill="off"
-      />
-      {value && value.length > 0 && !showToggle && (
-        <TouchableOpacity onPress={() => onChangeText("")} style={styles.clearButton}>
-          <Ionicons name="close-circle" size={20} color="#999" />
-        </TouchableOpacity>
-      )}
-      {showToggle && (
-        <TouchableOpacity onPress={onToggle} style={styles.eyeButton}>
-          <Ionicons name={toggleValue ? "eye-off" : "eye"} size={22} color="#999" />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <KeyboardAwareScrollView
-          contentContainerStyle={styles.scrollContent}
-          enableOnAndroid={true}
-          enableAutomaticScroll={true}
-          keyboardOpeningTime={0}
-          extraScrollHeight={Platform.OS === 'ios' ? 120 : 140}
-          extraHeight={Platform.OS === 'ios' ? 120 : 140}
-          viewIsInsideTabBar={false}
-          showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#0D7377" />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <LinearGradient
-            colors={["#0D7377", "#14919B"]}
-            style={styles.headerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.logoCircle}>
-              <Ionicons name="wallet" size={32} color="#14FFEC" />
+          {/* HEADER */}
+          <LinearGradient colors={["#0D7377", "#14919B"]} style={styles.header} start={{ x:0, y:0 }} end={{ x:1, y:1 }}>
+            <View style={styles.logoWrap}>
+              <Ionicons name="wallet" size={36} color="#14FFEC" />
             </View>
-            <Text style={styles.brandName}>WisePocket</Text>
-            <Text style={styles.tagline}>Connexion sécurisée</Text>
+            <Text style={styles.brand}>WisePocket</Text>
+            <Text style={styles.tagline}>Votre compagnon financier</Text>
           </LinearGradient>
 
-          <View style={styles.formContainer}>
-            <View style={styles.card}>
-              <Text style={styles.welcomeText}>Bienvenue</Text>
-              <Text style={styles.subtitle}>Connectez-vous pour gérer votre épargne</Text>
+          {/* FORMULAIRE */}
+          <View style={styles.card}>
+            <Text style={styles.welcomeTitle}>Bienvenue 👋</Text>
+            <Text style={styles.welcomeSub}>Connectez-vous pour gérer votre épargne</Text>
 
-              <WiseInput
-                icon="email"
+            {/* Erreur Redux */}
+            {error ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Email */}
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="email" size={20} color="#9CA3AF" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="votre@email.com"
+                placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Email"
-                isFocused={emailFocused}
-                setIsFocused={setEmailFocused}
                 keyboardType="email-address"
-                inputRef={emailInputRef}
+                autoCapitalize="none"
+                autoCorrect={false}
                 returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 blurOnSubmit={false}
-                onSubmitEditing={() => {
-                  passwordInputRef.current?.focus();
-                }}
               />
+              {email.length > 0 && (
+                <TouchableOpacity onPress={() => setEmail("")} hitSlop={{ top:10, bottom:10, left:10, right:10 }}>
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
 
-              <WiseInput
-                icon="lock"
+            {/* Mot de passe */}
+            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="lock" size={20} color="#9CA3AF" style={styles.inputIcon} />
+              <TextInput
+                ref={passwordRef}
+                style={styles.textInput}
+                placeholder="••••••••"
+                placeholderTextColor="#9CA3AF"
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Mot de passe"
                 secureTextEntry={!showPassword}
-                showToggle={true}
-                toggleValue={showPassword}
-                onToggle={() => setShowPassword(!showPassword)}
-                isFocused={passwordFocused}
-                setIsFocused={setPasswordFocused}
-                inputRef={passwordInputRef}
+                autoCapitalize="none"
+                autoCorrect={false}
                 returnKeyType="done"
-                blurOnSubmit={true}
                 onSubmitEditing={handleLogin}
               />
-
-              <TouchableOpacity style={styles.forgotContainer}>
-                <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+              <TouchableOpacity onPress={() => setShowPassword(v => !v)} hitSlop={{ top:10, bottom:10, left:10, right:10 }}>
+                <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#9CA3AF" />
               </TouchableOpacity>
+            </View>
 
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={["#0D7377", "#14FFEC"]}
-                  style={styles.gradientButton}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.buttonText}>
-                    {loading ? "CONNEXION..." : "SE CONNECTER"}
-                  </Text>
-                </LinearGradient>
+            <TouchableOpacity style={styles.forgotRow}>
+              <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            {/* Bouton */}
+            <TouchableOpacity
+              style={[styles.loginBtn, loading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={["#0D7377", "#14919B"]} style={styles.loginGradient} start={{ x:0, y:0 }} end={{ x:1, y:0 }}>
+                {loading
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <><Ionicons name="log-in" size={20} color="#FFF" /><Text style={styles.loginBtnText}>SE CONNECTER</Text></>
+                }
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Séparateur */}
+            <View style={styles.separator}>
+              <View style={styles.sepLine} />
+              <Text style={styles.sepText}>ou</Text>
+              <View style={styles.sepLine} />
+            </View>
+
+            {/* Sociaux */}
+            <View style={styles.socialRow}>
+              {[
+                { icon: "logo-google",   color: "#DB4437" },
+                { icon: "logo-apple",    color: "#111827" },
+                { icon: "logo-facebook", color: "#4267B2" },
+              ].map(({ icon, color }) => (
+                <TouchableOpacity key={icon} style={styles.socialBtn} activeOpacity={0.7}>
+                  <Ionicons name={icon} size={22} color={color} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Lien inscription */}
+            <View style={styles.registerRow}>
+              <Text style={styles.registerText}>Pas encore de compte ? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Register")} activeOpacity={0.7}>
+                <Text style={styles.registerLink}>Créer un compte</Text>
               </TouchableOpacity>
-
-              <View style={styles.separator}>
-                <View style={styles.line} />
-                <Text style={styles.orText}>Ou avec</Text>
-                <View style={styles.line} />
-              </View>
-
-              <View style={styles.socialContainer}>
-                <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-                  <Ionicons name="logo-google" size={24} color="#DB4437" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-                  <Ionicons name="logo-apple" size={24} color="#000" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-                  <Ionicons name="logo-facebook" size={24} color="#4267B2" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.registerContainer}>
-                <Text style={styles.noAccountText}>Pas encore de compte ? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate("Register")} activeOpacity={0.7}>
-                  <Text style={styles.registerLink}>Créer un compte</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           </View>
-        </KeyboardAwareScrollView>
-      </TouchableWithoutFeedback>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  headerGradient: {
+  safe:   { flex: 1, backgroundColor: "#0D7377" },
+  flex:   { flex: 1, backgroundColor: "#F8FFFE" },
+  scroll: { flexGrow: 1, backgroundColor: "#F8FFFE" },
+
+  header: {
     height: height * 0.28,
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    justifyContent: "center", alignItems: "center",
+    borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
   },
-  logoCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#14FFEC",
-    marginBottom: 10,
+  logoWrap: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 2, borderColor: "rgba(20,255,236,0.5)", marginBottom: 14,
   },
-  brandName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 4,
-  },
-  tagline: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-  },
-  formContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
+  brand:   { fontSize: 28, fontWeight: "800", color: "#FFF", letterSpacing: 0.5 },
+  tagline: { fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 5 },
+
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    marginHorizontal: 20, marginTop: -24,
+    backgroundColor: "#FFF", borderRadius: 24, padding: 24,
+    shadowColor: "#000", shadowOffset: { width:0, height:4 },
+    shadowOpacity: 0.08, shadowRadius: 16, elevation: 5,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#212121",
-    marginBottom: 6,
-    textAlign: "center",
+  welcomeTitle: { fontSize: 22, fontWeight: "800", color: "#111827", textAlign: "center", marginBottom: 4 },
+  welcomeSub:   { fontSize: 13, color: "#6B7280", textAlign: "center", marginBottom: 24 },
+
+  errorBox: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#FEF2F2", borderRadius: 10,
+    padding: 12, marginBottom: 16,
+    borderWidth: 1, borderColor: "#FECACA",
   },
-  subtitle: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 25,
+  errorText: { flex: 1, fontSize: 13, color: "#EF4444", fontWeight: "500" },
+
+  label:    { fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 8, marginLeft: 2 },
+  inputRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F9FAFB", borderRadius: 14,
+    paddingHorizontal: 14, height: 52, marginBottom: 16,
+    borderWidth: 1.5, borderColor: "#E5E7EB",
   },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8F9FA",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 52,
-    marginBottom: 15,
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
+  inputIcon: { marginRight: 10 },
+  textInput: { flex: 1, fontSize: 15, color: "#111827", height: "100%", paddingVertical: 0 },
+
+  forgotRow:  { alignSelf: "flex-end", marginBottom: 20, marginTop: -4 },
+  forgotText: { fontSize: 13, color: "#0D7377", fontWeight: "600" },
+
+  loginBtn: {
+    borderRadius: 14, overflow: "hidden",
+    shadowColor: "#0D7377", shadowOffset: { width:0, height:4 },
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 6, marginBottom: 22,
   },
-  inputContainerFocused: {
-    borderColor: "#0D7377",
-    backgroundColor: "#FFF",
-    borderWidth: 2,
+  loginGradient: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", height: 52, gap: 10,
   },
-  inputIcon: {
-    marginRight: 12,
+  loginBtnText: { fontSize: 16, fontWeight: "800", color: "#FFF", letterSpacing: 0.8 },
+
+  separator: { flexDirection: "row", alignItems: "center", marginBottom: 18 },
+  sepLine:   { flex: 1, height: 1, backgroundColor: "#E5E7EB" },
+  sepText:   { paddingHorizontal: 14, fontSize: 13, color: "#9CA3AF", fontWeight: "500" },
+
+  socialRow: { flexDirection: "row", justifyContent: "center", gap: 16, marginBottom: 22 },
+  socialBtn: {
+    width: 52, height: 52, borderRadius: 14,
+    backgroundColor: "#F9FAFB", justifyContent: "center", alignItems: "center",
+    borderWidth: 1, borderColor: "#E5E7EB",
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#212121",
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-    paddingHorizontal: 0,
+
+  registerRow: {
+    flexDirection: "row", justifyContent: "center", alignItems: "center",
+    paddingTop: 16, borderTopWidth: 1, borderTopColor: "#F3F4F6",
   },
-  clearButton: {
-    padding: 4,
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  forgotContainer: {
-    alignSelf: "flex-end",
-    marginBottom: 20,
-  },
-  forgotText: {
-    color: "#0D7377",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  loginButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: "#0D7377",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  gradientButton: {
-    height: 52,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  separator: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 25,
-    marginBottom: 20,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-  orText: {
-    color: "#999",
-    paddingHorizontal: 15,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  socialContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 20,
-    marginBottom: 25,
-  },
-  socialButton: {
-    width: 55,
-    height: 55,
-    borderRadius: 15,
-    backgroundColor: "#F8F9FA",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  registerContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
-  },
-  noAccountText: {
-    color: "#666",
-    fontSize: 14,
-  },
-  registerLink: {
-    color: "#0D7377",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
+  registerText: { fontSize: 14, color: "#6B7280" },
+  registerLink: { fontSize: 14, fontWeight: "700", color: "#0D7377" },
 });
 
 export default LoginScreen;

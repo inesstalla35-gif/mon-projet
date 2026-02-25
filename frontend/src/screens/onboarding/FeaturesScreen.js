@@ -1,140 +1,197 @@
-import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList,
-  Dimensions 
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  Animated,
+  TouchableOpacity,
+  ScrollView,
 } from 'react-native';
-import { Colors } from '../../screens/constant/colors';
-import OnboardingButton from '../../components/onboarding/OnboardingButton';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const features = [
   {
-    id: '1',
-    icon: '🎯',
+    icon: 'flag',
+    color: '#0D7377',
+    bg: '#E6F7F7',
     title: 'Objectifs personnalisés',
-    description: 'Définissez vos projets (voyage, maison, urgence) et suivez votre progression en temps réel.',
+    description: 'Voyage, logement, urgence… Définissez vos projets et suivez votre progression en temps réel.',
+    tag: 'POPULAIRE',
   },
   {
-    id: '2',
-    icon: '📊',
+    icon: 'pie-chart',
+    color: '#F59E0B',
+    bg: '#FEF3C7',
     title: 'Suivi intelligent',
-    description: 'Visualisez vos dépenses par catégorie et identifiez les fuites financières.',
+    description: 'Visualisez vos dépenses par catégorie et identifiez les fuites financières automatiquement.',
+    tag: null,
   },
   {
-    id: '3',
-    icon: '🤖',
-    title: 'Conseils IA',
-    description: 'Recevez des recommandations personnalisées basées sur vos habitudes financières.',
+    icon: 'bulb',
+    color: '#8B5CF6',
+    bg: '#EDE9FE',
+    title: 'Conseils personnalisés',
+    description: 'Recevez des recommandations basées sur vos habitudes pour maximiser votre épargne.',
+    tag: 'NOUVEAU',
   },
 ];
 
-const FeatureCard = ({ item }) => (
-  <View style={styles.card}>
-    <View style={styles.iconContainer}>
-      <Text style={styles.icon}>{item.icon}</Text>
-    </View>
-    <Text style={styles.cardTitle}>{item.title}</Text>
-    <Text style={styles.cardDescription}>{item.description}</Text>
-  </View>
-);
-
 const FeaturesScreen = ({ onNext, onBack }) => {
+  const anims = features.map(() => useRef(new Animated.Value(0)).current);
+
+  useEffect(() => {
+    Animated.stagger(150,
+      anims.map(anim =>
+        Animated.spring(anim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true })
+      )
+    ).start();
+  }, []);
+
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Ce que vous pouvez faire</Text>
-      <Text style={styles.headerSubtitle}>
-        Découvrez les fonctionnalités conçues pour vous aider à mieux gérer votre argent
-      </Text>
+      {/* Header */}
+      <LinearGradient
+        colors={['#0D7377', '#14919B']}
+        style={styles.header}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Ce que vous{'\n'}pouvez faire</Text>
+          <Text style={styles.headerSub}>3 outils puissants pour votre budget</Text>
+        </View>
+        <View style={styles.headerDeco}>
+          <Ionicons name="rocket" size={60} color="rgba(20,255,236,0.15)" />
+        </View>
+      </LinearGradient>
 
-      <FlatList
-        data={features}
-        renderItem={({ item }) => <FeatureCard item={item} />}
-        keyExtractor={item => item.id}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-      />
+      >
+        {features.map((feature, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.card,
+              {
+                opacity: anims[index],
+                transform: [
+                  { translateX: anims[index].interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.cardLeft}>
+              <View style={[styles.iconWrap, { backgroundColor: feature.bg }]}>
+                <Ionicons name={feature.icon} size={26} color={feature.color} />
+              </View>
+              <View style={styles.connector} />
+            </View>
+            <View style={styles.cardContent}>
+              {feature.tag && (
+                <View style={[styles.tagPill, { backgroundColor: feature.color + '18' }]}>
+                  <Text style={[styles.tagText, { color: feature.color }]}>{feature.tag}</Text>
+                </View>
+              )}
+              <Text style={styles.cardTitle}>{feature.title}</Text>
+              <Text style={styles.cardDesc}>{feature.description}</Text>
+            </View>
+          </Animated.View>
+        ))}
+      </ScrollView>
 
+      {/* Boutons */}
       <View style={styles.footer}>
-        <OnboardingButton 
-          title="Continuer" 
-          onPress={onNext}
-        />
-        <Text style={styles.skipText} onPress={onBack}>
-          Retour
-        </Text>
+        <TouchableOpacity onPress={onNext} activeOpacity={0.85} style={styles.btn}>
+          <LinearGradient
+            colors={['#0D7377', '#14919B']}
+            style={styles.btnGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Text style={styles.btnText}>Continuer</Text>
+            <Ionicons name="arrow-forward" size={20} color="#FFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onBack} style={styles.backLink}>
+          <Text style={styles.backLinkText}>← Retour</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.white,
+  container: { flex: 1, backgroundColor: '#F8FFFE' },
+  header: {
+    paddingTop: 56,
+    paddingBottom: 28,
     paddingHorizontal: 24,
-    paddingTop: 60,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.black,
-    marginBottom: 8,
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: Colors.gray600,
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  listContainer: {
-    paddingBottom: 20,
-  },
+  headerText: { flex: 1 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#FFF', lineHeight: 36, marginBottom: 8 },
+  headerSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
+  headerDeco: { position: 'absolute', right: -10, bottom: -10 },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 20, gap: 14, paddingBottom: 10 },
   card: {
-    backgroundColor: Colors.gray50,
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
     borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray100,
+    padding: 18,
+    shadowColor: '#0D7377',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+    gap: 16,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+  cardLeft: { alignItems: 'center' },
+  iconWrap: {
+    width: 52, height: 52, borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center',
   },
-  icon: {
-    fontSize: 28,
+  connector: { flex: 1, width: 2, backgroundColor: '#F0F0F0', marginTop: 8, borderRadius: 2 },
+  cardContent: { flex: 1 },
+  tagPill: {
+    alignSelf: 'flex-start', borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.black,
-    marginBottom: 8,
+  tagText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 6 },
+  cardDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+  footer: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
+  btn: {
+    borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#0D7377', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 7,
   },
-  cardDescription: {
-    fontSize: 14,
-    color: Colors.gray600,
-    lineHeight: 22,
+  btnGradient: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', paddingVertical: 18, gap: 10,
   },
-  footer: {
-    paddingBottom: 40,
-    paddingTop: 10,
-  },
-  skipText: {
-    textAlign: 'center',
-    marginTop: 16,
-    color: Colors.gray500,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  btnText: { fontSize: 17, fontWeight: '800', color: '#FFF' },
+  backLink: { alignItems: 'center', paddingVertical: 6 },
+  backLinkText: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
 });
 
 export default FeaturesScreen;

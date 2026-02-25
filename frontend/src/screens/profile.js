@@ -1,740 +1,625 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  Platform,
-  Image,
-  Animated,
+  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
+  Alert, Platform, Image, Animated, Switch, Modal, ActivityIndicator,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
-import API from "../services/api";
+import { useSelector, useDispatch } from "react-redux";
+import { getProfile, updateProfile, deleteProfile } from "../actions/profileActions";
 
-/* ================= OPTIONS ================= */
+const C = {
+  primary:'#0D7377', primaryMid:'#14919B', primaryLight:'#E6F7F7', accent:'#14FFEC',
+  dark:'#111827',    dark2:'#1F2937',       gray:'#6B7280',          grayLight:'#9CA3AF',
+  border:'#E5E7EB',  borderLight:'#F3F4F6', bg:'#F8FFFE',            card:'#FFFFFF',
+  income:'#0D7377',  incomeLight:'#E6F7F7', expense:'#EF4444',       expenseLight:'#FEF2F2',
+  warning:'#F59E0B', warningLight:'#FFFBEB',purple:'#8B5CF6',        purpleLight:'#EDE9FE',
+  pink:'#EC407A',    teal:'#14919B',        blue:'#4FC3F7',
+};
 
-const revenueOptions = [
-  { 
-    key: "salaire_fixe", 
-    label: "Salaire fixe",
-    icon: "briefcase",
-    desc: "Revenu régulier tous les mois"
-  },
-  { 
-    key: "freelance", 
-    label: "Freelance",
-    icon: "laptop-code",
-    desc: "Revenus basés sur missions/projets"
-  },
-  { 
-    key: "revenus_mixtes", 
-    label: "Revenus mixtes",
-    icon: "chart-line",
-    desc: "Salaire fixe + commissions/bonus"
-  },
-  { 
-    key: "revenus_passifs", 
-    label: "Revenus passifs",
-    icon: "building",
-    desc: "Loyers, dividendes, intérêts"
-  },
-  { 
-    key: "autres", 
-    label: "Autres revenus",
-    icon: "ellipsis-h",
-    desc: "Jobs occasionnels, ventes, aides"
-  },
+const REVENUE_OPTS = [
+  { key:"salaire_fixe",   label:"Salaire fixe",  icon:"briefcase",    desc:"Revenu mensuel régulier",  color:C.primary },
+  { key:"freelance",      label:"Freelance",      icon:"laptop-outline",desc:"Missions & projets",      color:C.purple  },
+  { key:"mixte",          label:"Mixte",          icon:"bar-chart",    desc:"Salaire + commissions",    color:C.warning },
+  { key:"passifs",        label:"Revenus passifs",icon:"home-outline", desc:"Loyers, dividendes",       color:C.teal    },
+  { key:"business",       label:"Business",       icon:"storefront",   desc:"Activité propre",          color:"#FF7043" },
+  { key:"autres",         label:"Autres",         icon:"cash-outline", desc:"Aides, remboursements",    color:C.gray    },
 ];
 
-const frequencyOptions = [
-  { key: "quotidienne", label: "Quotidienne", icon: "calendar-day" },
-  { key: "hebdomadaire", label: "Hebdomadaire", icon: "calendar-week" },
-  { key: "mensuelle", label: "Mensuelle", icon: "calendar-alt" },
-  { key: "variable", label: "Variable", icon: "random" },
+const FREQ_OPTS = [
+  { key:"quotidienne",  label:"Quotidien",  icon:"sunny-outline"     },
+  { key:"hebdomadaire", label:"Hebdo",      icon:"calendar-outline"  },
+  { key:"mensuelle",    label:"Mensuel",    icon:"calendar"          },
+  { key:"variable",     label:"Variable",   icon:"shuffle"           },
 ];
 
-const priorityOptions = [
-  { 
-    key: "loisirs", 
-    label: "Loisirs & Sorties",
-    icon: "glass-cheers",
-    desc: "Restaurants, cinéma, divertissements"
-  },
-  { 
-    key: "etudes", 
-    label: "Études & Formation",
-    icon: "graduation-cap",
-    desc: "Cours, matériel, frais scolaires"
-  },
-  { 
-    key: "fondation", 
-    label: "Fondation d'entreprise",
-    icon: "rocket",
-    desc: "Investir dans un projet pro"
-  },
-  { 
-    key: "projet", 
-    label: "Projet personnel",
-    icon: "bullseye",
-    desc: "Voyage, équipement, maison"
-  },
-  { 
-    key: "epargne", 
-    label: "Épargne de sécurité",
-    icon: "shield-alt",
-    desc: "Fond d'urgence et imprévus"
-  },
+const PRIORITY_OPTS = [
+  { key:"loisirs",   label:"Loisirs",       icon:"game-controller",  desc:"Sorties, divertissements", color:C.pink    },
+  { key:"etudes",    label:"Études",        icon:"school",           desc:"Formation, matériel",       color:C.purple  },
+  { key:"business",  label:"Business",      icon:"rocket",           desc:"Projets professionnels",    color:C.warning },
+  { key:"projet",    label:"Projet perso",  icon:"flag",             desc:"Voyage, équipement",        color:C.blue    },
+  { key:"epargne",   label:"Sécurité",      icon:"shield-checkmark", desc:"Fond d'urgence",            color:C.primary },
+  { key:"sante",     label:"Santé",         icon:"medical",          desc:"Soins, médicaments",        color:"#EF5350" },
+  { key:"famille",   label:"Famille",       icon:"people",           desc:"Charges familiales",        color:"#FF7043" },
 ];
 
-const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=Wise+Pocket&background=0D7377&color=fff&size=256";
+const MONNAIES = ["FCFA (XAF)","FCFA (XOF)","EUR (€)","USD ($)"];
+const LANGUES  = ["Français","English","Portugais"];
 
-/* ================= SCREEN ================= */
+const getInitials = (nom = '', prenom = '') => {
+  const p = (prenom?.[0] || '').toUpperCase();
+  const n = (nom?.[0]    || '').toUpperCase();
+  return (p + n) || '?';
+};
 
-const ProfileScreen = () => {
-  const [loading, setLoading] = useState(true);
-  const [profileExists, setProfileExists] = useState(false);
-  const [scrollY] = useState(new Animated.Value(0));
+const getFullName = (user) => {
+  if (!user) return 'Utilisateur';
+  if (user.prenom && user.nom) return `${user.prenom} ${user.nom}`;
+  if (user.name)               return user.name;
+  if (user.nom)                return user.nom;
+  return 'Utilisateur';
+};
 
-  // États existants
-  const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
-  const [dateNaissance, setDateNaissance] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [profession, setProfession] = useState("");
-  const [revenusSelected, setRevenusSelected] = useState([]);
-  const [prioritesSelected, setPrioritesSelected] = useState([]);
-
-  // NOUVEAUX CHAMPS ajoutés
-  const [nom, setNom] = useState("");
-  const [prenom, setPrenom] = useState("");
-  const [telephone, setTelephone] = useState("");
-  const [bio, setBio] = useState("");
-  const [objectifEpargne, setObjectifEpargne] = useState("");
-  const [dejaEpargne, setDejaEpargne] = useState("");
-  const [niveauRisque, setNiveauRisque] = useState("modere"); // faible, modere, eleve
-  const [notificationActive, setNotificationActive] = useState(true);
-
-  /* ================= LOAD PROFILE ================= */
+// ─── Section accordéon ────────────────────────────────────────────────────────
+const Section = ({ id, icon, color, title, badge, activeSection, setActiveSection, children }) => {
+  const isOpen = activeSection === id;
+  const rot = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) return;
+    Animated.timing(rot, { toValue:isOpen?1:0, duration:200, useNativeDriver:true }).start();
+  }, [isOpen]);
 
-        const res = await API.get("/api/profile/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (res.data?.profile) {
-          const p = res.data.profile;
-          setProfileExists(true);
-          setAvatar(p.avatar || DEFAULT_AVATAR);
-          setDateNaissance(new Date(p.date_naissance));
-          setProfession(p.profession || "");
-          setRevenusSelected(p.revenus || []);
-          setPrioritesSelected(p.priorites || []);
-          
-          // Nouveaux champs
-          setNom(p.nom || "");
-          setPrenom(p.prenom || "");
-          setTelephone(p.telephone || "");
-          setBio(p.bio || "");
-          setObjectifEpargne(p.objectif_epargne?.toString() || "");
-          setDejaEpargne(p.deja_epargne?.toString() || "");
-          setNiveauRisque(p.niveau_risque || "modere");
-          setNotificationActive(p.notifications !== false);
-        }
-      } catch (e) {
-        console.log("Profil non existant");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, []);
-
-  /* ================= PHOTO UPLOAD ================= */
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder à la galerie.');
-      return;
-    }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setAvatar(result.assets[0].uri);
-    }
-  };
-
-  /* ================= REVENUS ================= */
-
-  const toggleRevenue = (opt) => {
-    const exists = revenusSelected.find((r) => r.key === opt.key);
-    if (exists) {
-      setRevenusSelected(revenusSelected.filter((r) => r.key !== opt.key));
-    } else {
-      setRevenusSelected([
-        ...revenusSelected,
-        { 
-          key: opt.key, 
-          label: opt.label, 
-          montant: "", 
-          frequency: "",
-          pourcentageEpargne: "10" // Par défaut 10% d'épargne sur ce revenu
-        },
-      ]);
-    }
-  };
-
-  const updateRevenue = (key, field, value) => {
-    setRevenusSelected(
-      revenusSelected.map((r) =>
-        r.key === key ? { ...r, [field]: value } : r
-      )
-    );
-  };
-
-  /* ================= PRIORITÉS ================= */
-
-  const togglePriority = (opt) => {
-    const exists = prioritesSelected.find((p) => p.key === opt.key);
-    if (exists) {
-      setPrioritesSelected(prioritesSelected.filter((p) => p.key !== opt.key));
-    } else {
-      setPrioritesSelected([
-        ...prioritesSelected,
-        { 
-          key: opt.key, 
-          label: opt.label, 
-          montant: "",
-          urgent: false
-        },
-      ]);
-    }
-  };
-
-  const updatePriority = (key, field, value) => {
-    setPrioritesSelected(
-      prioritesSelected.map((p) =>
-        p.key === key ? { ...p, [field]: value } : p
-      )
-    );
-  };
-
-  /* ================= CALCULS ================= */
-
-  const calculateTotalRevenus = () => {
-    return revenusSelected.reduce((total, r) => {
-      const montant = parseFloat(r.montant) || 0;
-      return total + montant;
-    }, 0);
-  };
-
-  const calculateEpargnePotentielle = () => {
-    return revenusSelected.reduce((total, r) => {
-      const montant = parseFloat(r.montant) || 0;
-      const pourcentage = parseFloat(r.pourcentageEpargne) || 10;
-      return total + (montant * pourcentage / 100);
-    }, 0);
-  };
-
-  /* ================= SUBMIT ================= */
-
-  const handleSubmit = async () => {
-    if (!prenom || !nom || !profession) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs obligatoires.");
-      return;
-    }
-
-    if (revenusSelected.length === 0) {
-      Alert.alert("Erreur", "Veuillez sélectionner au moins un type de revenu.");
-      return;
-    }
-
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
-
-      const payload = {
-        avatar,
-        nom,
-        prenom,
-        telephone,
-        bio,
-        date_naissance: dateNaissance.toISOString(),
-        profession,
-        objectif_epargne: Number(objectifEpargne) || 0,
-        deja_epargne: Number(dejaEpargne) || 0,
-        niveau_risque: niveauRisque,
-        notifications: notificationActive,
-        revenus: revenusSelected.map((r) => ({
-          ...r,
-          montant: Number(r.montant),
-          pourcentageEpargne: Number(r.pourcentageEpargne) || 10
-        })),
-        priorites: prioritesSelected.map((p) => ({
-          ...p,
-          montant: Number(p.montant || 0),
-        })),
-      };
-
-      await API.post("/api/profile/profile", payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      Alert.alert(
-        "Succès",
-        profileExists ? "Profil mis à jour avec succès !" : "Profil créé avec succès !"
-      );
-      setProfileExists(true);
-    } catch (e) {
-      Alert.alert("Erreur", "Impossible d'enregistrer le profil. Vérifiez votre connexion.");
-    }
-  };
-
-  /* ================= RENDER ================= */
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Image 
-          source={{ uri: DEFAULT_AVATAR }} 
-          style={[styles.loadingLogo, { opacity: 0.3 }]} 
-        />
-        <Text style={styles.loadingText}>Chargement de votre profil...</Text>
-      </View>
-    );
-  }
-
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const rotDeg = rot.interpolate({ inputRange:[0,1], outputRange:['0deg','180deg'] });
 
   return (
-    <View style={styles.safeArea}>
-      {/* Header flottant */}
-      <Animated.View style={[styles.floatingHeader, { opacity: headerOpacity }]}>
-        <Text style={styles.floatingHeaderText}>Mon Profil</Text>
-      </Animated.View>
-
-      <Animated.ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+    <View style={styles.sectionWrap}>
+      <TouchableOpacity style={styles.sectionHead}
+        onPress={()=>setActiveSection(isOpen?null:id)} activeOpacity={0.8}>
+        <View style={[styles.sectionHeadIcon,{backgroundColor:color+'18'}]}>
+          <Ionicons name={icon} size={20} color={color}/>
+        </View>
+        <Text style={styles.sectionHeadTxt}>{title}</Text>
+        {badge!=null && badge>0 && (
+          <View style={[styles.sectionBadge,{backgroundColor:color}]}>
+            <Text style={styles.sectionBadgeTxt}>{badge}</Text>
+          </View>
         )}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* En-tête avec gradient */}
-        <View style={styles.header}>
-          <LinearGradient
-            colors={["#0D7377", "#14FFEC"]}
-            style={styles.headerGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.headerContent}>
-              <Text style={styles.headerTitle}>Profil WisePocket</Text>
-              <Text style={styles.headerSubtitle}>Gérez votre épargne intelligemment</Text>
-            </View>
-          </LinearGradient>
-        </View>
+        <Animated.View style={{transform:[{rotate:rotDeg}],marginLeft:4}}>
+          <Ionicons name="chevron-down" size={18} color={C.grayLight}/>
+        </Animated.View>
+      </TouchableOpacity>
+      {isOpen && <View style={styles.sectionBody}>{children}</View>}
+    </View>
+  );
+};
 
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={pickImage} style={styles.avatarWrapper}>
-            <Image source={{ uri: avatar }} style={styles.avatar} />
-            <View style={styles.avatarOverlay}>
-              <Ionicons name="camera" size={24} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-          <Text style={styles.changePhotoText}>Appuyez pour changer la photo</Text>
-        </View>
+const Field = ({ label, icon, iconColor, children, optional }) => (
+  <View style={styles.field}>
+    <View style={styles.fieldLabel}>
+      {icon && <Ionicons name={icon} size={13} color={iconColor||C.grayLight} style={{marginRight:5}}/>}
+      <Text style={styles.lbl}>{label}</Text>
+      {optional && <Text style={styles.optional}> · optionnel</Text>}
+    </View>
+    {children}
+  </View>
+);
 
-        {/* Informations Personnelles */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="person" size={24} color="#0D7377" />
-            <Text style={styles.sectionTitle}>Informations personnelles</Text>
+// ═════════════════════════════════════════════════════════════════════════════
+const ProfileScreen = () => {
+  const dispatch   = useDispatch();
+  const { user }   = useSelector((state) => state.auth);
+  const profile    = useSelector((state) => state.profile.profile);
+  const isLoading  = useSelector((state) => state.profile.isLoading);
+  const reduxError = useSelector((state) => state.profile.error);
+
+  // ── Identité ──────────────────────────────────────────────────────────────
+  const [avatar, setAvatar]         = useState(null);
+  const [nom, setNom]               = useState("");
+  const [prenom, setPrenom]         = useState("");
+  const [telephone, setTelephone]   = useState("");
+  const [email, setEmail]           = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio]               = useState("");
+  const [dateNaissance, setDOB]     = useState(new Date(1995, 0, 1));
+  const [showDate, setShowDate]     = useState(false);
+  const [ville, setVille]           = useState("");
+
+  // ── Finances ──────────────────────────────────────────────────────────────
+  const [revenusSelected, setRevSel]    = useState([]);
+  const [prioritesSelected, setPrioSel] = useState([]);
+
+  // ── Préférences ───────────────────────────────────────────────────────────
+  const [monnaie, setMonnaie]           = useState("FCFA (XAF)");
+  const [langue, setLangue]             = useState("Français");
+  const [showMonnaieModal, setShowMonnaie] = useState(false);
+  const [showLangueModal, setShowLangue]   = useState(false);
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  const [notifGlobal,    setNotifGlobal]  = useState(true);
+  const [notifBudget,    setNotifBudget]  = useState(true);
+  const [notifObjectifs, setNotifObj]     = useState(true);
+  const [notifConseils,  setNotifCons]    = useState(false);
+  const [notifRapports,  setNotifRap]     = useState(true);
+
+  // ── Sécurité ──────────────────────────────────────────────────────────────
+  const [biometrie,  setBiometrie]  = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false);
+  const [autoLock,   setAutoLock]   = useState("5min");
+
+  // ── UI ────────────────────────────────────────────────────────────────────
+  const [activeSection, setActiveSection] = useState("identite");
+  const fade = useRef(new Animated.Value(0)).current;
+
+  // ── Chargement du profil au montage ───────────────────────────────────────
+  useEffect(() => {
+    dispatch(getProfile());
+    Animated.timing(fade, { toValue:1, duration:600, useNativeDriver:true }).start();
+  }, []);
+
+  // ── Hydratation des états locaux quand Redux reçoit le profil ─────────────
+  useEffect(() => {
+    if (!profile) return;
+
+    setNom(profile.nom || "");
+    setPrenom(profile.prenom || "");
+    setEmail(profile.email || "");
+    setTelephone(profile.telephone || "");
+    setProfession(profile.profession || "");
+    setBio(profile.bio || "");
+    setVille(profile.ville || "");
+    setAvatar(profile.avatar || null);
+    if (profile.dateNaissance) setDOB(new Date(profile.dateNaissance));
+
+    if (Array.isArray(profile.revenus))   setRevSel(profile.revenus.map(r => ({
+      ...r, montant: String(r.montant || ""), pctEpargne: String(r.pctEpargne ?? "10")
+    })));
+    if (Array.isArray(profile.priorites)) setPrioSel(profile.priorites.map(p => ({
+      ...p, montant: String(p.montant || "")
+    })));
+
+    setMonnaie(profile.monnaie || "FCFA (XAF)");
+    setLangue(profile.langue || "Français");
+
+    if (profile.notifications) {
+      setNotifGlobal(profile.notifications.global    ?? true);
+      setNotifBudget(profile.notifications.budget    ?? true);
+      setNotifObj(profile.notifications.objectifs    ?? true);
+      setNotifCons(profile.notifications.conseils    ?? false);
+      setNotifRap(profile.notifications.rapports     ?? true);
+    }
+
+    if (profile.securite) {
+      setBiometrie(profile.securite.biometrie  ?? false);
+      setPinEnabled(profile.securite.pinEnabled ?? false);
+      setAutoLock(profile.securite.autoLock     || "5min");
+    }
+  }, [profile]);
+
+  // ── Computed ──────────────────────────────────────────────────────────────
+  const initials  = getInitials(nom, prenom);
+  const fullName  = getFullName({ nom, prenom });
+  const avatarUrl = avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0D7377&color=fff&size=256`;
+
+  const totalRev = revenusSelected.reduce((s,r) => s + (parseFloat(r.montant)||0), 0);
+  const epargPot = revenusSelected.reduce((s,r) => s + ((parseFloat(r.montant)||0)*(parseFloat(r.pctEpargne)||10)/100), 0);
+
+  const profileCompleteness = [
+    prenom, nom, telephone, profession,
+    revenusSelected.length>0, prioritesSelected.length>0
+  ].filter(Boolean).length;
+  const completePct = Math.round((profileCompleteness / 6) * 100);
+
+  // ── Avatar picker ─────────────────────────────────────────────────────────
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission requise','Accès galerie nécessaire.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect:[1,1], quality:0.85
+    });
+    if (!res.canceled) setAvatar(res.assets[0].uri);
+  };
+
+  // ── Revenus helpers ───────────────────────────────────────────────────────
+  const toggleRevenu = (opt) => {
+    const exists = revenusSelected.find(r => r.key === opt.key);
+    if (exists) setRevSel(revenusSelected.filter(r => r.key !== opt.key));
+    else setRevSel([...revenusSelected, { key:opt.key, label:opt.label, montant:"", frequency:"mensuelle", pctEpargne:"10" }]);
+  };
+  const updRev = (key, field, val) => setRevSel(revenusSelected.map(r => r.key===key ? {...r,[field]:val} : r));
+
+  // ── Priorités helpers ────────────────────────────────────────────────────
+  const togglePrio = (opt) => {
+    const exists = prioritesSelected.find(p => p.key === opt.key);
+    if (exists) setPrioSel(prioritesSelected.filter(p => p.key !== opt.key));
+    else setPrioSel([...prioritesSelected, { key:opt.key, label:opt.label, montant:"", urgent:false }]);
+  };
+  const updPrio = (key, field, val) => setPrioSel(prioritesSelected.map(p => p.key===key ? {...p,[field]:val} : p));
+
+  // ── Sauvegarde ────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!prenom || !nom || !profession) {
+      Alert.alert("Champs requis", "Prénom, nom et profession sont obligatoires.");
+      return;
+    }
+
+    // Prépare le payload complet à envoyer au backend
+    const profileData = {
+      // Identité
+      nom,
+      prenom,
+      email,
+      telephone,
+      profession,
+      bio,
+      dateNaissance: dateNaissance.toISOString(),
+      ville,
+      avatar: avatar || "",
+      // Finances — on convertit les montants en nombres
+      revenus: revenusSelected.map(r => ({
+        key:        r.key,
+        label:      r.label,
+        montant:    parseFloat(r.montant)    || 0,
+        pctEpargne: parseFloat(r.pctEpargne) || 10,
+        frequency:  r.frequency || "mensuelle",
+      })),
+      priorites: prioritesSelected.map(p => ({
+        key:     p.key,
+        label:   p.label,
+        montant: parseFloat(p.montant) || 0,
+        urgent:  p.urgent || false,
+      })),
+      // Préférences
+      monnaie,
+      langue,
+      // Notifications
+      notifications: {
+        global:    notifGlobal,
+        budget:    notifBudget,
+        objectifs: notifObjectifs,
+        conseils:  notifConseils,
+        rapports:  notifRapports,
+      },
+      // Sécurité
+      securite: {
+        biometrie,
+        pinEnabled,
+        autoLock,
+      },
+    };
+
+    const result = await dispatch(updateProfile(profileData));
+
+    if (result?.success) {
+      Alert.alert("✅ Profil enregistré !", "Toutes vos informations ont été sauvegardées avec succès.");
+    } else {
+      Alert.alert("Erreur", result?.error || "Une erreur est survenue lors de la sauvegarde.");
+    }
+  };
+
+  // ── Suppression du profil ─────────────────────────────────────────────────
+  const handleDeleteProfile = () => {
+    Alert.alert(
+      "Supprimer le profil",
+      "Êtes-vous sûr de vouloir supprimer définitivement votre profil et tout votre historique ? Cette action est irréversible.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            const result = await dispatch(deleteProfile());
+            if (result?.success) {
+              Alert.alert("Profil supprimé", "Votre profil a été supprimé avec succès.");
+            } else {
+              Alert.alert("Erreur", result?.error || "Impossible de supprimer le profil.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Picker modal réutilisable ─────────────────────────────────────────────
+  const PickerModal = ({ visible, onClose, title, options, selected, onSelect }) => (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle}/>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.gray}/></TouchableOpacity>
           </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Prénom *</Text>
-              <TextInput
-                style={styles.input}
-                value={prenom}
-                onChangeText={setPrenom}
-                placeholder="Jean"
-                placeholderTextColor="#999"
-              />
-            </View>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Nom *</Text>
-              <TextInput
-                style={styles.input}
-                value={nom}
-                onChangeText={setNom}
-                placeholder="Dupont"
-                placeholderTextColor="#999"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Téléphone</Text>
-            <TextInput
-              style={styles.input}
-              value={telephone}
-              onChangeText={setTelephone}
-              placeholder="+237 6XX XXX XXX"
-              keyboardType="phone-pad"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Date de naissance</Text>
-              <TouchableOpacity
-                style={styles.dateInput}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar" size={20} color="#0D7377" />
-                <Text style={styles.dateText}>
-                  {dateNaissance.toLocaleDateString('fr-FR')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Profession *</Text>
-              <TextInput
-                style={styles.input}
-                value={profession}
-                onChangeText={setProfession}
-                placeholder="Développeur"
-                placeholderTextColor="#999"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Bio (optionnel)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Parlez-nous de vos objectifs financiers..."
-              multiline
-              numberOfLines={3}
-              placeholderTextColor="#999"
-            />
-          </View>
-        </View>
-
-        {/* Objectifs d'épargne */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="savings" size={24} color="#0D7377" />
-            <Text style={styles.sectionTitle}>Objectifs d'épargne</Text>
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Objectif total (FCFA)</Text>
-              <TextInput
-                style={styles.input}
-                value={objectifEpargne}
-                onChangeText={setObjectifEpargne}
-                placeholder="1 000 000"
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-            </View>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Déjà épargné (FCFA)</Text>
-              <TextInput
-                style={styles.input}
-                value={dejaEpargne}
-                onChangeText={setDejaEpargne}
-                placeholder="0"
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-            </View>
-          </View>
-
-          {/* Barre de progression visuelle */}
-          {objectifEpargne && (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View 
-                  style={[
-                    styles.progressFill, 
-                    { 
-                      width: `${Math.min((parseFloat(dejaEpargne) || 0) / (parseFloat(objectifEpargne) || 1) * 100, 100)}%` 
-                    }
-                  ]} 
-                />
-              </View>
-              <Text style={styles.progressText}>
-                {Math.round((parseFloat(dejaEpargne) || 0) / (parseFloat(objectifEpargne) || 1) * 100)}% atteint
-              </Text>
-            </View>
-          )}
-
-          <Text style={styles.label}>Tolérance au risque</Text>
-          <View style={styles.riskContainer}>
-            {['faible', 'modere', 'eleve'].map((risque) => (
-              <TouchableOpacity
-                key={risque}
-                style={[
-                  styles.riskBtn,
-                  niveauRisque === risque && styles.riskBtnActive
-                ]}
-                onPress={() => setNiveauRisque(risque)}
-              >
-                <View style={[
-                  styles.riskIndicator,
-                  { 
-                    backgroundColor: 
-                      risque === 'faible' ? '#4CAF50' : 
-                      risque === 'modere' ? '#FF9800' : '#F44336'
-                  }
-                ]} />
-                <Text style={[
-                  styles.riskText,
-                  niveauRisque === risque && styles.riskTextActive
-                ]}>
-                  {risque === 'faible' ? 'Faible' : 
-                   risque === 'modere' ? 'Modéré' : 'Élevé'}
-                </Text>
+          <ScrollView>
+            {options.map(opt => (
+              <TouchableOpacity key={opt} style={[styles.modalItem, selected===opt&&styles.modalItemActive]}
+                onPress={() => { onSelect(opt); onClose(); }}>
+                <Text style={[styles.modalItemTxt, selected===opt&&{color:C.primary,fontWeight:'700'}]}>{opt}</Text>
+                {selected===opt && <Ionicons name="checkmark-circle" size={20} color={C.primary}/>}
               </TouchableOpacity>
             ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // ═════════════════════════════════════════════════════════════════════════
+  return (
+    <View style={styles.container}>
+
+      {/* ──────────── HERO HEADER ──────────── */}
+      <LinearGradient colors={[C.dark2, C.dark]} style={styles.hero} start={{x:0,y:0}} end={{x:1,y:1}}>
+        <View style={styles.heroDeco1}/><View style={styles.heroDeco2}/>
+
+        <View style={styles.completionBar}>
+          <View style={{flex:1}}>
+            <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:6}}>
+              <Text style={{fontSize:12,color:'rgba(255,255,255,0.65)',fontWeight:'600'}}>Profil complété</Text>
+              <Text style={{fontSize:12,color:C.accent,fontWeight:'800'}}>{completePct}%</Text>
+            </View>
+            <View style={styles.completionBg}>
+              <LinearGradient colors={[C.primary,C.accent]} style={[styles.completionFill,{width:completePct+'%'}]} start={{x:0,y:0}} end={{x:1,y:0}}/>
+            </View>
           </View>
         </View>
 
-        {/* Revenus */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="account-balance-wallet" size={24} color="#0D7377" />
-            <Text style={styles.sectionTitle}>Sources de revenus</Text>
-            <Text style={styles.sectionSubtitle}>Sélectionnez vos types de revenus</Text>
+        <View style={styles.avatarRow}>
+          <TouchableOpacity onPress={pickImage} style={styles.avatarWrap} activeOpacity={0.85}>
+            <Image source={{uri: avatarUrl}} style={styles.avatar}/>
+            <View style={styles.avatarEditBtn}>
+              <Ionicons name="camera" size={13} color="#FFF"/>
+            </View>
+          </TouchableOpacity>
+          <View style={{flex:1,marginLeft:16}}>
+            <Text style={styles.heroName}>{fullName}</Text>
+            <Text style={styles.heroProfession}>{profession||"Profession non renseignée"}</Text>
+            <View style={{flexDirection:'row',alignItems:'center',gap:5,marginTop:6}}>
+              <View style={styles.heroPlan}>
+                <Ionicons name="star" size={10} color={C.accent}/>
+                <Text style={{fontSize:11,fontWeight:'700',color:C.accent}}>Gratuit</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.heroStats}>
+          {[
+            {icon:'trending-up', label:'Épargne/mois', val:epargPot>0?Math.round(epargPot).toLocaleString('fr-FR')+' F':'—', color:C.accent},
+            {icon:'wallet',      label:'Revenus',       val:totalRev>0?totalRev.toLocaleString('fr-FR')+' F':'—',              color:'rgba(255,255,255,0.9)'},
+          ].map((s,i) => (
+            <React.Fragment key={i}>
+              {i>0 && <View style={{width:1,backgroundColor:'rgba(255,255,255,0.12)',marginVertical:4}}/>}
+              <View style={{flex:1,alignItems:'center',gap:3}}>
+                <Ionicons name={s.icon} size={14} color={s.color}/>
+                <Text style={{fontSize:13,fontWeight:'800',color:s.color}}>{s.val}</Text>
+                <Text style={{fontSize:10,color:'rgba(255,255,255,0.5)'}}>{s.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+      </LinearGradient>
+
+      {/* ──────────── SCROLL CONTENT ──────────── */}
+      <Animated.ScrollView style={{opacity:fade}} contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}>
+
+        {/* Indicateur de chargement Redux */}
+        {isLoading && (
+          <View style={styles.loadingBanner}>
+            <ActivityIndicator size="small" color={C.primary}/>
+            <Text style={{marginLeft:8,fontSize:13,color:C.primary,fontWeight:'600'}}>Chargement...</Text>
+          </View>
+        )}
+
+        {/* Bannière d'erreur Redux */}
+        {reduxError && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={16} color={C.expense}/>
+            <Text style={{marginLeft:8,fontSize:13,color:C.expense,flex:1}}>{reduxError}</Text>
+          </View>
+        )}
+
+        {/* ══ IDENTITÉ ══ */}
+        <Section id="identite" icon="person" color={C.primary} title="Informations personnelles"
+          badge={null} activeSection={activeSection} setActiveSection={setActiveSection}>
+
+          <View style={{flexDirection:'row',gap:10}}>
+            <View style={{flex:1}}>
+              <Field label="Prénom *" icon="person-outline">
+                <TextInput style={styles.input} value={prenom} onChangeText={setPrenom}
+                  placeholder="Jean" placeholderTextColor={C.grayLight}/>
+              </Field>
+            </View>
+            <View style={{flex:1}}>
+              <Field label="Nom *" icon="person-outline">
+                <TextInput style={styles.input} value={nom} onChangeText={setNom}
+                  placeholder="Dupont" placeholderTextColor={C.grayLight}/>
+              </Field>
+            </View>
           </View>
 
-          <View style={styles.optionsGrid}>
-            {revenueOptions.map((opt) => {
-              const selected = revenusSelected.some((r) => r.key === opt.key);
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[
-                    styles.optionCard,
-                    selected && styles.optionCardSelected
-                  ]}
-                  onPress={() => toggleRevenue(opt)}
-                >
-                  <FontAwesome5 
-                    name={opt.icon} 
-                    size={20} 
-                    color={selected ? '#FFF' : '#0D7377'} 
-                  />
-                  <Text style={[
-                    styles.optionCardText,
-                    selected && styles.optionCardTextSelected
-                  ]}>
-                    {opt.label}
+          <Field label="Email" icon="mail-outline" optional>
+            <TextInput style={styles.input} value={email} onChangeText={setEmail}
+              placeholder="jean@email.com" keyboardType="email-address" autoCapitalize="none"
+              placeholderTextColor={C.grayLight}/>
+          </Field>
+
+          <Field label="Téléphone" icon="call-outline" optional>
+            <TextInput style={styles.input} value={telephone} onChangeText={setTelephone}
+              placeholder="+237 6XX XXX XXX" keyboardType="phone-pad"
+              placeholderTextColor={C.grayLight}/>
+          </Field>
+
+          <View style={{flexDirection:'row',gap:10}}>
+            <View style={{flex:1}}>
+              <Field label="Date de naissance">
+                <TouchableOpacity style={styles.selectBtn} onPress={()=>setShowDate(true)}>
+                  <Ionicons name="calendar-outline" size={16} color={C.primary}/>
+                  <Text style={styles.selectBtnTxt}>
+                    {dateNaissance.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}
                   </Text>
-                  {selected && (
-                    <Ionicons name="checkmark-circle" size={20} color="#14FFEC" />
-                  )}
                 </TouchableOpacity>
+              </Field>
+            </View>
+            <View style={{flex:1}}>
+              <Field label="Ville" icon="map-outline" optional>
+                <TextInput style={styles.input} value={ville} onChangeText={setVille}
+                  placeholder="Yaoundé, Douala..." placeholderTextColor={C.grayLight}/>
+              </Field>
+            </View>
+          </View>
+
+          <Field label="Profession *" icon="briefcase-outline">
+            <TextInput style={styles.input} value={profession} onChangeText={setProfession}
+              placeholder="Développeur" placeholderTextColor={C.grayLight}/>
+          </Field>
+
+          <Field label="Bio" icon="chatbubble-outline" optional>
+            <TextInput style={[styles.input,{height:80,textAlignVertical:'top',paddingTop:12}]}
+              value={bio} onChangeText={setBio} multiline numberOfLines={3}
+              placeholder="Partagez vos ambitions financières..."
+              placeholderTextColor={C.grayLight}/>
+          </Field>
+        </Section>
+
+        {/* ══ SOURCES DE REVENUS ══ */}
+        <Section id="revenus" icon="wallet" color={C.warning} title="Sources de revenus"
+          badge={revenusSelected.length||null} activeSection={activeSection} setActiveSection={setActiveSection}>
+
+          <Text style={styles.sectionDesc}>Sélectionnez et détaillez vos sources de revenus pour des analyses précises.</Text>
+
+          <View style={{gap:8,marginBottom:12}}>
+            {REVENUE_OPTS.map(opt=>{
+              const sel  = revenusSelected.some(r=>r.key===opt.key);
+              const data = revenusSelected.find(r=>r.key===opt.key);
+              return (
+                <View key={opt.key} style={[styles.revCard, sel&&{borderColor:opt.color,borderWidth:2}]}>
+                  <TouchableOpacity style={styles.revCardHead} onPress={()=>toggleRevenu(opt)} activeOpacity={0.8}>
+                    <View style={[styles.revIcon,{backgroundColor:opt.color+'18'}]}>
+                      <Ionicons name={opt.icon} size={20} color={opt.color}/>
+                    </View>
+                    <View style={{flex:1,marginLeft:12}}>
+                      <Text style={[styles.revLbl, sel&&{color:opt.color}]}>{opt.label}</Text>
+                      <Text style={styles.revDesc2}>{opt.desc}</Text>
+                    </View>
+                    <View style={[styles.checkbox, sel&&{backgroundColor:opt.color,borderColor:opt.color}]}>
+                      {sel&&<Ionicons name="checkmark" size={14} color="#FFF"/>}
+                    </View>
+                  </TouchableOpacity>
+
+                  {sel&&data&&(
+                    <View style={styles.revDetail}>
+                      <View style={{flexDirection:'row',gap:10,marginBottom:10}}>
+                        <View style={{flex:2}}>
+                          <Text style={styles.lbl}>Montant estimé (F)</Text>
+                          <TextInput style={styles.input} value={data.montant}
+                            onChangeText={v=>updRev(opt.key,'montant',v.replace(/[^0-9]/g,''))}
+                            keyboardType="numeric" placeholder="0" placeholderTextColor={C.grayLight}/>
+                        </View>
+                        <View style={{flex:1}}>
+                          <Text style={styles.lbl}>% Épargne</Text>
+                          <View style={styles.pctInputWrap}>
+                            <TextInput style={[styles.input,{paddingRight:24,textAlign:'center'}]}
+                              value={data.pctEpargne}
+                              onChangeText={v=>updRev(opt.key,'pctEpargne',v.replace(/[^0-9]/g,''))}
+                              keyboardType="numeric" placeholder="10" placeholderTextColor={C.grayLight}/>
+                            <Text style={styles.pctSign}>%</Text>
+                          </View>
+                        </View>
+                      </View>
+                      {parseFloat(data.montant)>0 && parseFloat(data.pctEpargne)>0 && (
+                        <View style={[styles.revCalcChip,{backgroundColor:opt.color+'12'}]}>
+                          <Ionicons name="arrow-up-circle" size={14} color={opt.color}/>
+                          <Text style={{fontSize:12,color:opt.color,fontWeight:'600'}}>
+                            Épargne : {Math.round(parseFloat(data.montant)*parseFloat(data.pctEpargne)/100).toLocaleString('fr-FR')} F / période
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={[styles.lbl,{marginTop:10}]}>Fréquence de réception</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop:6}}>
+                        {FREQ_OPTS.map(f=>(
+                          <TouchableOpacity key={f.key} onPress={()=>updRev(opt.key,'frequency',f.key)}
+                            style={[styles.freqChip, data.frequency===f.key&&{backgroundColor:opt.color,borderColor:opt.color}]}>
+                            <Ionicons name={f.icon} size={12} color={data.frequency===f.key?'#FFF':opt.color}/>
+                            <Text style={[styles.freqChipTxt, data.frequency===f.key&&{color:'#FFF'}]}>{f.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
               );
             })}
           </View>
 
-          {/* Détails des revenus sélectionnés */}
-          {revenusSelected.map((rev) => (
-            <View key={rev.key} style={styles.revenueDetailCard}>
-              <View style={styles.revenueDetailHeader}>
-                <Text style={styles.revenueDetailTitle}>{rev.label}</Text>
-                <TouchableOpacity onPress={() => toggleRevenue(rev)}>
-                  <Ionicons name="close-circle" size={24} color="#999" />
-                </TouchableOpacity>
+          {revenusSelected.length>0 && (
+            <LinearGradient colors={[C.dark,C.dark2]} style={styles.revSummary} start={{x:0,y:0}} end={{x:1,y:0}}>
+              <View style={styles.revSummaryDeco}/>
+              <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:8}}>
+                <Text style={{color:'rgba(255,255,255,0.65)',fontSize:13}}>Total mensuel estimé</Text>
+                <Text style={{color:'#FFF',fontWeight:'800',fontSize:14}}>{totalRev.toLocaleString('fr-FR')} F</Text>
               </View>
-              
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 2 }]}>
-                  <Text style={styles.label}>Montant (FCFA)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={rev.montant}
-                    onChangeText={(v) => updateRevenue(rev.key, "montant", v)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#999"
-                  />
+              <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}>
+                <Text style={{color:'rgba(255,255,255,0.65)',fontSize:13}}>Épargne potentielle</Text>
+                <Text style={{color:C.accent,fontWeight:'900',fontSize:16}}>{Math.round(epargPot).toLocaleString('fr-FR')} F</Text>
+              </View>
+              {totalRev>0 && (
+                <View style={{marginTop:10}}>
+                  <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:5}}>
+                    <Text style={{fontSize:11,color:'rgba(255,255,255,0.45)'}}>Taux d'épargne global</Text>
+                    <Text style={{fontSize:11,color:C.accent,fontWeight:'700'}}>{Math.round(epargPot/totalRev*100)}%</Text>
+                  </View>
+                  <View style={{height:4,backgroundColor:'rgba(255,255,255,0.1)',borderRadius:2,overflow:'hidden'}}>
+                    <View style={{width:`${Math.round(epargPot/totalRev*100)}%`,height:'100%',backgroundColor:C.accent,borderRadius:2}}/>
+                  </View>
                 </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
-                  <Text style={styles.label}>% Épargne</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={rev.pourcentageEpargne}
-                    onChangeText={(v) => updateRevenue(rev.key, "pourcentageEpargne", v)}
-                    keyboardType="numeric"
-                    placeholder="10"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.label}>Fréquence</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {frequencyOptions.map((freq) => (
-                  <TouchableOpacity
-                    key={freq.key}
-                    style={[
-                      styles.freqChip,
-                      rev.frequency === freq.key && styles.freqChipActive
-                    ]}
-                    onPress={() => updateRevenue(rev.key, "frequency", freq.key)}
-                  >
-                    <FontAwesome5 
-                      name={freq.icon} 
-                      size={12} 
-                      color={rev.frequency === freq.key ? '#FFF' : '#0D7377'} 
-                      style={{ marginRight: 5 }}
-                    />
-                    <Text style={[
-                      styles.freqChipText,
-                      rev.frequency === freq.key && styles.freqChipTextActive
-                    ]}>
-                      {freq.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          ))}
-
-          {/* Résumé des revenus */}
-          {revenusSelected.length > 0 && (
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total mensuel estimé:</Text>
-                <Text style={styles.summaryValue}>
-                  {calculateTotalRevenus().toLocaleString()} FCFA
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Épargne potentielle:</Text>
-                <Text style={[styles.summaryValue, { color: '#0D7377' }]}>
-                  {calculateEpargnePotentielle().toLocaleString()} FCFA
-                </Text>
-              </View>
-            </View>
+              )}
+            </LinearGradient>
           )}
-        </View>
+        </Section>
 
-        {/* Priorités */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="stars" size={24} color="#0D7377" />
-            <Text style={styles.sectionTitle}>Priorités budgétaires</Text>
-            <Text style={styles.sectionSubtitle}>Quelles sont vos priorités ?</Text>
-          </View>
+        {/* ══ PRIORITÉS BUDGÉTAIRES ══ */}
+        <Section id="priorites" icon="star" color={C.pink} title="Priorités budgétaires"
+          badge={prioritesSelected.length||null} activeSection={activeSection} setActiveSection={setActiveSection}>
 
-          <View style={styles.priorityList}>
-            {priorityOptions.map((opt) => {
-              const selected = prioritesSelected.some((p) => p.key === opt.key);
-              const data = prioritesSelected.find((p) => p.key === opt.key);
+          <Text style={styles.sectionDesc}>Définissez vos postes de dépenses prioritaires pour un suivi budgétaire adapté.</Text>
 
+          <View style={{gap:8,marginBottom:12}}>
+            {PRIORITY_OPTS.map(opt=>{
+              const sel  = prioritesSelected.some(p=>p.key===opt.key);
+              const data = prioritesSelected.find(p=>p.key===opt.key);
               return (
-                <View key={opt.key}>
-                  <TouchableOpacity
-                    style={[
-                      styles.priorityItem,
-                      selected && styles.priorityItemSelected
-                    ]}
-                    onPress={() => togglePriority(opt)}
-                  >
-                    <View style={styles.priorityIconContainer}>
-                      <FontAwesome5 
-                        name={opt.icon} 
-                        size={18} 
-                        color={selected ? '#FFF' : '#0D7377'} 
-                      />
+                <View key={opt.key} style={[styles.revCard, sel&&{borderColor:opt.color,borderWidth:2}]}>
+                  <TouchableOpacity style={styles.revCardHead} onPress={()=>togglePrio(opt)} activeOpacity={0.8}>
+                    <View style={[styles.revIcon,{backgroundColor:opt.color+'18'}]}>
+                      <Ionicons name={opt.icon} size={20} color={opt.color}/>
                     </View>
-                    <View style={styles.priorityContent}>
-                      <Text style={[
-                        styles.priorityTitle,
-                        selected && styles.priorityTitleSelected
-                      ]}>
-                        {opt.label}
-                      </Text>
-                      <Text style={styles.priorityDesc}>{opt.desc}</Text>
+                    <View style={{flex:1,marginLeft:12}}>
+                      <Text style={[styles.revLbl, sel&&{color:opt.color}]}>{opt.label}</Text>
+                      <Text style={styles.revDesc2}>{opt.desc}</Text>
                     </View>
-                    <View style={[
-                      styles.checkbox,
-                      selected && styles.checkboxActive
-                    ]}>
-                      {selected && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                    <View style={[styles.checkbox, sel&&{backgroundColor:opt.color,borderColor:opt.color}]}>
+                      {sel&&<Ionicons name="checkmark" size={14} color="#FFF"/>}
                     </View>
                   </TouchableOpacity>
-
-                  {selected && (
-                    <View style={styles.priorityDetail}>
-                      <View style={styles.row}>
-                        <View style={[styles.inputGroup, { flex: 1 }]}>
-                          <Text style={styles.label}>Budget mensuel (FCFA)</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={data.montant}
-                            onChangeText={(v) => updatePriority(opt.key, "montant", v)}
-                            keyboardType="numeric"
-                            placeholder="0"
-                            placeholderTextColor="#999"
-                          />
+                  {sel&&data&&(
+                    <View style={styles.revDetail}>
+                      <View style={{flexDirection:'row',gap:10,alignItems:'flex-end'}}>
+                        <View style={{flex:1}}>
+                          <Text style={styles.lbl}>Budget mensuel (F)</Text>
+                          <TextInput style={styles.input} value={data.montant}
+                            onChangeText={v=>updPrio(opt.key,'montant',v.replace(/[^0-9]/g,''))}
+                            keyboardType="numeric" placeholder="0" placeholderTextColor={C.grayLight}/>
                         </View>
-                        <View style={{ marginLeft: 15, justifyContent: 'center' }}>
-                          <TouchableOpacity 
-                            style={[
-                              styles.urgentToggle,
-                              data.urgent && styles.urgentToggleActive
-                            ]}
-                            onPress={() => updatePriority(opt.key, "urgent", !data.urgent)}
-                          >
-                            <Ionicons 
-                              name={data.urgent ? "notifications" : "notifications-outline"} 
-                              size={20} 
-                              color={data.urgent ? '#F44336' : '#999'} 
-                            />
-                            <Text style={[
-                              styles.urgentText,
-                              data.urgent && styles.urgentTextActive
-                            ]}>
-                              Urgent
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity onPress={()=>updPrio(opt.key,'urgent',!data.urgent)}
+                          style={[styles.urgentBtn, data.urgent&&{backgroundColor:C.expenseLight,borderColor:C.expense}]}>
+                          <Ionicons name={data.urgent?"alert-circle":"alert-circle-outline"} size={18}
+                            color={data.urgent?C.expense:C.grayLight}/>
+                          <Text style={[styles.urgentTxt, data.urgent&&{color:C.expense,fontWeight:'700'}]}>Urgent</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   )}
@@ -742,563 +627,246 @@ const ProfileScreen = () => {
               );
             })}
           </View>
-        </View>
+        </Section>
 
-        {/* Notifications */}
-        <View style={styles.section}>
-          <View style={styles.notificationRow}>
-            <View style={styles.notificationContent}>
-              <MaterialIcons name="notifications-active" size={24} color="#0D7377" />
-              <View style={{ marginLeft: 10 }}>
-                <Text style={styles.notificationTitle}>Notifications</Text>
-                <Text style={styles.notificationDesc}>Alertes et rappels d'épargne</Text>
-              </View>
+        {/* ══ NOTIFICATIONS ══ */}
+        <Section id="notifs" icon="notifications" color="#4FC3F7" title="Notifications"
+          badge={null} activeSection={activeSection} setActiveSection={setActiveSection}>
+
+          <View style={[styles.toggleRow, {borderBottomWidth:1,borderBottomColor:C.borderLight,paddingBottom:14,marginBottom:10}]}>
+            <View style={[styles.toggleIcon,{backgroundColor:'#E0F7FA'}]}>
+              <Ionicons name="notifications" size={18} color="#0097A7"/>
             </View>
-            <TouchableOpacity 
-              style={[
-                styles.toggle,
-                notificationActive && styles.toggleActive
-              ]}
-              onPress={() => setNotificationActive(!notificationActive)}
-            >
-              <View style={[
-                styles.toggleCircle,
-                notificationActive && styles.toggleCircleActive
-              ]} />
-            </TouchableOpacity>
+            <View style={{flex:1,marginLeft:12}}>
+              <Text style={styles.toggleLbl}>Activer les notifications</Text>
+              <Text style={styles.toggleDesc}>Maître principal des alertes</Text>
+            </View>
+            <Switch value={notifGlobal} onValueChange={setNotifGlobal}
+              trackColor={{false:C.border,true:C.primary+'80'}} thumbColor={notifGlobal?C.primary:'#FFF'}/>
           </View>
-        </View>
 
-        {/* Bouton Submit */}
-        <TouchableOpacity 
-          style={styles.submitButton} 
-          onPress={handleSubmit}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={["#0D7377", "#14FFEC"]}
-            style={styles.gradientButton}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Text style={styles.submitButtonText}>
-              {profileExists ? "Mettre à jour le profil" : "Créer mon profil"}
+          {[
+            {val:notifBudget,    set:setNotifBudget, icon:'wallet-outline',        bg:'#E6F7F7',     color:C.primary, lbl:'Alertes budget',        desc:'Dépassements de budget'},
+            {val:notifObjectifs, set:setNotifObj,    icon:'flag-outline',           bg:C.purpleLight, color:C.purple,  lbl:'Objectifs',             desc:'Progression & échéances'},
+            {val:notifConseils,  set:setNotifCons,   icon:'bulb-outline',           bg:'#FFFBEB',     color:C.warning, lbl:'Conseils personnalisés', desc:"Tips d'épargne & optimisation"},
+            {val:notifRapports,  set:setNotifRap,    icon:'document-text-outline',  bg:'#F3E5F5',     color:C.purple,  lbl:'Rapports mensuels',     desc:'Bilan financier mensuel'},
+          ].map((n,i)=>(
+            <View key={i} style={[styles.toggleRow, i<3&&{borderBottomWidth:1,borderBottomColor:C.borderLight,paddingBottom:12,marginBottom:12}]}>
+              <View style={[styles.toggleIcon,{backgroundColor:n.bg}]}>
+                <Ionicons name={n.icon} size={18} color={n.color}/>
+              </View>
+              <View style={{flex:1,marginLeft:12}}>
+                <Text style={[styles.toggleLbl,!notifGlobal&&{color:C.grayLight}]}>{n.lbl}</Text>
+                <Text style={styles.toggleDesc}>{n.desc}</Text>
+              </View>
+              <Switch value={notifGlobal&&n.val} onValueChange={notifGlobal?n.set:undefined}
+                trackColor={{false:C.border,true:n.color+'80'}} thumbColor={notifGlobal&&n.val?n.color:'#FFF'}
+                disabled={!notifGlobal}/>
+            </View>
+          ))}
+        </Section>
+
+        {/* ══ PRÉFÉRENCES ══ */}
+        <Section id="prefs" icon="settings" color={C.teal} title="Préférences de l'application"
+          badge={null} activeSection={activeSection} setActiveSection={setActiveSection}>
+
+          <Field label="Devise" icon="cash-outline">
+            <TouchableOpacity style={styles.selectBtn} onPress={()=>setShowMonnaie(true)}>
+              <Ionicons name="cash-outline" size={16} color={C.primary}/>
+              <Text style={styles.selectBtnTxt}>{monnaie}</Text>
+              <Ionicons name="chevron-down" size={14} color={C.grayLight}/>
+            </TouchableOpacity>
+          </Field>
+
+          <Field label="Langue de l'interface" icon="language-outline">
+            <TouchableOpacity style={styles.selectBtn} onPress={()=>setShowLangue(true)}>
+              <Ionicons name="language-outline" size={16} color={C.primary}/>
+              <Text style={styles.selectBtnTxt}>{langue}</Text>
+              <Ionicons name="chevron-down" size={14} color={C.grayLight}/>
+            </TouchableOpacity>
+          </Field>
+
+          <View style={styles.prefNote}>
+            <Ionicons name="information-circle" size={16} color={C.primary}/>
+            <Text style={{fontSize:12,color:C.primary,flex:1,lineHeight:18,marginLeft:8}}>
+              Les préférences de devise affecteront l'affichage dans toute l'application.
             </Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFF" style={{ marginLeft: 10 }} />
+          </View>
+        </Section>
+
+        {/* ══ SÉCURITÉ ══ */}
+        <Section id="securite" icon="shield-checkmark" color={C.expense} title="Sécurité & Confidentialité"
+          badge={null} activeSection={activeSection} setActiveSection={setActiveSection}>
+
+          {[
+            {val:biometrie,  set:setBiometrie,  icon:'finger-print', bg:'#FEF2F2',  color:C.expense, lbl:'Authentification biométrique', desc:'Empreinte digitale ou Face ID'},
+            {val:pinEnabled, set:setPinEnabled, icon:'keypad',        bg:'#FFF3E0',  color:C.warning, lbl:'Code PIN',                     desc:"Protéger l'accès par un code 4 chiffres"},
+          ].map((s,i)=>(
+            <View key={i} style={[styles.toggleRow, i===0&&{borderBottomWidth:1,borderBottomColor:C.borderLight,paddingBottom:14,marginBottom:14}]}>
+              <View style={[styles.toggleIcon,{backgroundColor:s.bg}]}>
+                <Ionicons name={s.icon} size={18} color={s.color}/>
+              </View>
+              <View style={{flex:1,marginLeft:12}}>
+                <Text style={styles.toggleLbl}>{s.lbl}</Text>
+                <Text style={styles.toggleDesc}>{s.desc}</Text>
+              </View>
+              <Switch value={s.val} onValueChange={s.set}
+                trackColor={{false:C.border,true:s.color+'80'}} thumbColor={s.val?s.color:'#FFF'}/>
+            </View>
+          ))}
+
+          <Field label="Verrouillage automatique" icon="lock-closed-outline">
+            <View style={{flexDirection:'row',gap:8,marginTop:4}}>
+              {['1min','5min','15min','Jamais'].map(t=>(
+                <TouchableOpacity key={t} onPress={()=>setAutoLock(t)}
+                  style={[styles.lockChip, autoLock===t&&{backgroundColor:C.expense,borderColor:C.expense}]}>
+                  <Text style={[styles.lockChipTxt, autoLock===t&&{color:'#FFF',fontWeight:'700'}]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Field>
+
+          {/* Bouton suppression — appelle maintenant handleDeleteProfile */}
+          <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteProfile}>
+            <Ionicons name="trash-outline" size={18} color={C.expense}/>
+            <View style={{flex:1,marginLeft:10}}>
+              <Text style={{fontSize:14,fontWeight:'700',color:C.expense}}>Supprimer mes données</Text>
+              <Text style={{fontSize:12,color:C.grayLight}}>Effacer définitivement le profil et l'historique</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={C.grayLight}/>
+          </TouchableOpacity>
+        </Section>
+
+        {/* ══ BOUTON SAUVEGARDER ══ */}
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85} disabled={isLoading}>
+          <LinearGradient colors={[C.primary,C.primaryMid]} style={styles.saveGrad} start={{x:0,y:0}} end={{x:1,y:0}}>
+            {isLoading
+              ? <ActivityIndicator size="small" color="#FFF"/>
+              : <>
+                  <Ionicons name="checkmark-circle" size={22} color="#FFF"/>
+                  <Text style={styles.saveTxt}>Sauvegarder le profil</Text>
+                </>
+            }
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Espace en bas */}
-        <View style={{ height: 40 }} />
+        <Text style={{textAlign:'center',fontSize:12,color:C.grayLight,marginBottom:36,marginTop:4}}>
+          🔒 WisePocket · Vos données sont chiffrées et sécurisées
+        </Text>
       </Animated.ScrollView>
 
-      {/* DatePicker Modal */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={dateNaissance}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          maximumDate={new Date()}
-          onChange={(e, d) => {
-            setShowDatePicker(false);
-            if (d) setDateNaissance(d);
-          }}
-        />
+      {/* ── Date Picker ── */}
+      {showDate && (
+        <DateTimePicker value={dateNaissance} mode="date"
+          display={Platform.OS==='ios'?'spinner':'default'} maximumDate={new Date()}
+          onChange={(e,d)=>{ setShowDate(false); if(d) setDOB(d); }}/>
       )}
+
+      {/* ── Modaux picker ── */}
+      <PickerModal visible={showMonnaieModal} onClose={()=>setShowMonnaie(false)} title="Devise"
+        options={MONNAIES} selected={monnaie} onSelect={setMonnaie}/>
+      <PickerModal visible={showLangueModal} onClose={()=>setShowLangue(false)} title="Langue"
+        options={LANGUES} selected={langue} onSelect={setLangue}/>
     </View>
   );
 };
 
-export default ProfileScreen;
-
-/* ================= STYLES ================= */
-
-import { LinearGradient } from 'expo-linear-gradient';
-
+// ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFF",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFF",
-  },
-  loadingLogo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  loadingText: {
-    marginTop: 20,
-    color: "#0D7377",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  floatingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  floatingHeaderText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#212121",
-  },
-  scrollContent: {
-    backgroundColor: "#FFF",
-  },
-  header: {
-    height: 200,
-  },
-  headerGradient: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerContent: {
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-  },
-  avatarSection: {
-    alignItems: "center",
-    marginTop: -50,
-    marginBottom: 20,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    borderRadius: 75,
-    borderWidth: 4,
-    borderColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  avatar: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-  },
-  avatarOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: 'rgba(13,115,119,0.8)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  changePhotoText: {
-    marginTop: 10,
-    color: "#0D7377",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  section: {
-    backgroundColor: "#FFF",
-    marginHorizontal: 16,
-    marginBottom: 20,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#212121",
-    marginLeft: 10,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: "#666",
-    marginLeft: 34,
-    marginTop: -10,
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  inputGroup: {
-    marginBottom: 15,
-  },
-  halfWidth: {
-    width: "48%",
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#555",
-    marginBottom: 6,
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: "#212121",
-    backgroundColor: "#FAFAFA",
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  dateInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
-  },
-  dateText: {
-    marginLeft: 10,
-    fontSize: 15,
-    color: "#212121",
-  },
-  progressContainer: {
-    marginVertical: 15,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: "#E0E0E0",
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#0D7377',
-    borderRadius: 4,
-  },
-  progressText: {
-    textAlign: 'center',
-    marginTop: 8,
-    color: '#0D7377',
-    fontWeight: '700',
-  },
-  riskContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  riskBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    marginHorizontal: 4,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    backgroundColor: "#FAFAFA",
-  },
-  riskBtnActive: {
-    borderColor: "#0D7377",
-    backgroundColor: "rgba(13,115,119,0.1)",
-  },
-  riskIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  riskText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#666",
-  },
-  riskTextActive: {
-    color: "#0D7377",
-  },
-  optionsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  optionCard: {
-    width: "48%",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FAFAFA",
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-  },
-  optionCardSelected: {
-    backgroundColor: "#0D7377",
-    borderColor: "#0D7377",
-  },
-  optionCardText: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#212121",
-  },
-  optionCardTextSelected: {
-    color: "#FFF",
-  },
-  revenueDetailCard: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: "#0D7377",
-  },
-  revenueDetailHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  revenueDetailTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#212121",
-  },
-  freqChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#0D7377",
-    marginRight: 8,
-    backgroundColor: "#FFF",
-  },
-  freqChipActive: {
-    backgroundColor: "#0D7377",
-    borderColor: "#0D7377",
-  },
-  freqChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#0D7377",
-  },
-  freqChipTextActive: {
-    color: "#FFF",
-  },
-  summaryCard: {
-    backgroundColor: "#0D7377",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 10,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 14,
-  },
-  summaryValue: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  priorityList: {
-    marginTop: 10,
-  },
-  priorityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FAFAFA",
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-  },
-  priorityItemSelected: {
-    backgroundColor: "#0D7377",
-    borderColor: "#0D7377",
-  },
-  priorityIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(13,115,119,0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  priorityContent: {
-    flex: 1,
-  },
-  priorityTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#212121",
-    marginBottom: 2,
-  },
-  priorityTitleSelected: {
-    color: "#FFF",
-  },
-  priorityDesc: {
-    fontSize: 12,
-    color: "#666",
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#0D7377",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxActive: {
-    backgroundColor: "#14FFEC",
-    borderColor: "#14FFEC",
-  },
-  priorityDetail: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 15,
-    marginTop: -5,
-    marginBottom: 15,
-    marginLeft: 5,
-    marginRight: 5,
-  },
-  urgentToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#F0F0F0",
-  },
-  urgentToggleActive: {
-    backgroundColor: "#FFEBEE",
-  },
-  urgentText: {
-    marginLeft: 5,
-    fontSize: 12,
-    color: "#999",
-    fontWeight: "600",
-  },
-  urgentTextActive: {
-    color: "#F44336",
-  },
-  notificationRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  notificationContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  notificationTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#212121",
-  },
-  notificationDesc: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-  toggle: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#E0E0E0",
-    padding: 2,
-  },
-  toggleActive: {
-    backgroundColor: "#0D7377",
-  },
-  toggleCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleCircleActive: {
-    transform: [{ translateX: 22 }],
-  },
-  submitButton: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 30,
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#0D7377",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  gradientButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-  },
-  submitButtonText: {
-    color: "#FFF",
-    fontSize: 17,
-    fontWeight: "700",
-  },
+  container: { flex:1, backgroundColor:C.bg },
+
+  // HERO
+  hero: { paddingTop:50, paddingHorizontal:20, paddingBottom:0, overflow:'hidden' },
+  heroDeco1: { position:'absolute', width:240, height:240, borderRadius:120, backgroundColor:'rgba(20,255,236,0.04)', top:-100, right:-80 },
+  heroDeco2: { position:'absolute', width:140, height:140, borderRadius:70, backgroundColor:'rgba(255,255,255,0.02)', bottom:-40, left:-30 },
+  completionBar: { marginBottom:18 },
+  completionBg: { height:6, backgroundColor:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden' },
+  completionFill: { height:'100%', borderRadius:3 },
+  avatarRow: { flexDirection:'row', alignItems:'center', marginBottom:20 },
+  avatarWrap: { position:'relative' },
+  avatar: { width:80, height:80, borderRadius:24, borderWidth:3, borderColor:'rgba(255,255,255,0.3)' },
+  avatarEditBtn: { position:'absolute', bottom:-2, right:-2, backgroundColor:C.primary, width:26, height:26, borderRadius:9, justifyContent:'center', alignItems:'center', borderWidth:2, borderColor:'#FFF' },
+  heroName: { fontSize:20, fontWeight:'900', color:'#FFF', marginBottom:3 },
+  heroProfession: { fontSize:13, color:'rgba(255,255,255,0.65)', marginBottom:6 },
+  heroPlan: { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'rgba(20,255,236,0.12)', borderRadius:8, paddingHorizontal:8, paddingVertical:3, borderWidth:1, borderColor:'rgba(20,255,236,0.25)' },
+  heroStats: { flexDirection:'row', backgroundColor:'rgba(255,255,255,0.08)', borderRadius:16, paddingVertical:12, marginBottom:-1 },
+
+  // SCROLL
+  scroll: { padding:16, paddingTop:18 },
+
+  // LOADING / ERROR BANNERS
+  loadingBanner: { flexDirection:'row', alignItems:'center', backgroundColor:C.primaryLight, borderRadius:12, padding:12, marginBottom:10 },
+  errorBanner:   { flexDirection:'row', alignItems:'center', backgroundColor:C.expenseLight, borderRadius:12, padding:12, marginBottom:10 },
+
+  // SECTION
+  sectionWrap: { backgroundColor:C.card, borderRadius:20, marginBottom:10, overflow:'hidden', shadowColor:'#0D7377', shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:2 },
+  sectionHead: { flexDirection:'row', alignItems:'center', padding:16, gap:10 },
+  sectionHeadIcon: { width:42, height:42, borderRadius:13, justifyContent:'center', alignItems:'center' },
+  sectionHeadTxt: { flex:1, fontSize:16, fontWeight:'700', color:C.dark },
+  sectionBadge: { width:20, height:20, borderRadius:10, justifyContent:'center', alignItems:'center', marginRight:4 },
+  sectionBadgeTxt: { fontSize:11, fontWeight:'800', color:'#FFF' },
+  sectionBody: { paddingHorizontal:16, paddingBottom:16 },
+  sectionDesc: { fontSize:13, color:C.gray, lineHeight:19, marginBottom:14, borderLeftWidth:3, borderLeftColor:C.borderLight, paddingLeft:10 },
+
+  // FIELDS
+  field: { marginBottom:12 },
+  fieldLabel: { flexDirection:'row', alignItems:'center', marginBottom:6 },
+  lbl: { fontSize:11, fontWeight:'700', color:C.grayLight, textTransform:'uppercase', letterSpacing:0.5 },
+  optional: { fontSize:10, color:C.grayLight, fontStyle:'italic' },
+  input: { borderWidth:1.5, borderColor:C.border, borderRadius:12, paddingHorizontal:14, paddingVertical:11, fontSize:14, color:C.dark, backgroundColor:C.bg },
+  selectBtn: { flexDirection:'row', alignItems:'center', gap:8, borderWidth:1.5, borderColor:C.border, borderRadius:12, paddingHorizontal:14, paddingVertical:11, backgroundColor:C.bg },
+  selectBtnTxt: { flex:1, fontSize:14, color:C.dark, fontWeight:'600' },
+
+  // REV CARDS
+  revCard: { backgroundColor:C.bg, borderRadius:16, borderWidth:1.5, borderColor:C.border, overflow:'hidden' },
+  revCardHead: { flexDirection:'row', alignItems:'center', padding:14 },
+  revIcon: { width:44, height:44, borderRadius:13, justifyContent:'center', alignItems:'center' },
+  revLbl: { fontSize:14, fontWeight:'700', color:C.dark },
+  revDesc2: { fontSize:12, color:C.grayLight, marginTop:2 },
+  checkbox: { width:24, height:24, borderRadius:12, borderWidth:2, borderColor:C.border, justifyContent:'center', alignItems:'center' },
+  revDetail: { backgroundColor:C.borderLight, padding:14 },
+  pctInputWrap: { position:'relative' },
+  pctSign: { position:'absolute', right:12, top:12, fontSize:14, color:C.grayLight, fontWeight:'700' },
+  revCalcChip: { flexDirection:'row', alignItems:'center', gap:6, borderRadius:10, padding:8, marginBottom:8 },
+  freqChip: { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:12, paddingVertical:7, borderRadius:20, borderWidth:1.5, borderColor:C.primary, marginRight:8, backgroundColor:C.card },
+  freqChipTxt: { fontSize:12, fontWeight:'600', color:C.primary },
+
+  // REV SUMMARY
+  revSummary: { borderRadius:16, padding:16, overflow:'hidden' },
+  revSummaryDeco: { position:'absolute', width:120, height:120, borderRadius:60, backgroundColor:'rgba(20,255,236,0.05)', top:-40, right:-30 },
+
+  // URGENT
+  urgentBtn: { flexDirection:'row', alignItems:'center', gap:5, borderWidth:1.5, borderColor:C.border, borderRadius:12, paddingHorizontal:12, paddingVertical:11, backgroundColor:C.card },
+  urgentTxt: { fontSize:12, fontWeight:'600', color:C.grayLight },
+
+  // TOGGLES
+  toggleRow: { flexDirection:'row', alignItems:'center' },
+  toggleIcon: { width:40, height:40, borderRadius:12, justifyContent:'center', alignItems:'center' },
+  toggleLbl: { fontSize:14, fontWeight:'700', color:C.dark },
+  toggleDesc: { fontSize:12, color:C.grayLight, marginTop:1 },
+
+  // PREF
+  prefNote: { flexDirection:'row', alignItems:'flex-start', backgroundColor:C.primaryLight, borderRadius:12, padding:12, marginTop:4 },
+
+  // SECURITY
+  lockChip: { paddingHorizontal:12, paddingVertical:8, borderRadius:10, borderWidth:1.5, borderColor:C.border, backgroundColor:C.bg },
+  lockChipTxt: { fontSize:12, fontWeight:'600', color:C.gray },
+  dangerBtn: { flexDirection:'row', alignItems:'center', marginTop:14, borderWidth:1.5, borderColor:'#FECACA', borderRadius:14, padding:14, backgroundColor:'#FFF5F5' },
+
+  // SAVE
+  saveBtn: { borderRadius:16, overflow:'hidden', marginTop:6, marginBottom:14, shadowColor:C.primary, shadowOffset:{width:0,height:4}, shadowOpacity:0.3, shadowRadius:10, elevation:5 },
+  saveGrad: { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:10, paddingVertical:17 },
+  saveTxt: { fontSize:16, fontWeight:'800', color:'#FFF' },
+
+  // MODAL
+  modalOverlay: { flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' },
+  modalSheet: { backgroundColor:C.card, borderTopLeftRadius:24, borderTopRightRadius:24, padding:20, paddingBottom:Platform.OS==='ios'?40:20, maxHeight:'60%' },
+  modalHandle: { width:40, height:4, borderRadius:2, backgroundColor:C.border, alignSelf:'center', marginBottom:16 },
+  modalHeader: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:14 },
+  modalTitle: { fontSize:19, fontWeight:'800', color:C.dark },
+  modalItem: { flexDirection:'row', alignItems:'center', padding:14, borderRadius:12, marginBottom:6, backgroundColor:C.bg },
+  modalItemActive: { backgroundColor:C.primaryLight, borderWidth:1.5, borderColor:C.primary },
+  modalItemTxt: { flex:1, fontSize:15, color:C.dark, fontWeight:'500' },
 });
+
+export default ProfileScreen;
